@@ -8,18 +8,20 @@ Ribasim.config is a submodule mainly to avoid name clashes between the configura
 """
 module config
 
+using ADTypes: AutoFiniteDiff, AutoForwardDiff
 using Configurations: Configurations, @option, from_toml, @type_alias
 using DataStructures: DefaultDict
 using Dates: DateTime
+using LineSearch: BackTracking
 using Logging: LogLevel, Debug, Info, Warn, Error
 using ..Ribasim: Ribasim, isnode, nodetype
 using OrdinaryDiffEqCore: OrdinaryDiffEqAlgorithm, OrdinaryDiffEqNewtonAdaptiveAlgorithm
-using OrdinaryDiffEqNonlinearSolve: NLNewton
+using OrdinaryDiffEqNonlinearSolve: NonlinearSolveAlg, NewtonRaphson
 using OrdinaryDiffEqLowOrderRK: Euler, RK4
 using OrdinaryDiffEqTsit5: Tsit5
 using OrdinaryDiffEqSDIRK: ImplicitEuler, KenCarp4, TRBDF2
 using OrdinaryDiffEqBDF: FBDF, QNDF
-using OrdinaryDiffEqRosenbrock: Rosenbrock23, Rodas4P, Rodas5P
+# using OrdinaryDiffEqRosenbrock: Rosenbrock23, Rodas4P, Rodas5P
 
 export Config, Solver, Results, Logging, Toml
 export algorithm,
@@ -253,10 +255,10 @@ Supported algorithms:
 const algorithms = Dict{String, Type}(
     "QNDF" => QNDF,
     "FBDF" => FBDF,
-    "Rosenbrock23" => Rosenbrock23,
+    # "Rosenbrock23" => Rosenbrock23,
     "TRBDF2" => TRBDF2,
-    "Rodas4P" => Rodas4P,
-    "Rodas5P" => Rodas5P,
+    # "Rodas4P" => Rodas4P,
+    # "Rodas5P" => Rodas5P,
     "KenCarp4" => KenCarp4,
     "Tsit5" => Tsit5,
     "RK4" => RK4,
@@ -287,8 +289,8 @@ function algorithm(solver::Solver; u0 = [])::OrdinaryDiffEqAlgorithm
     kwargs = Dict{Symbol, Any}()
 
     if algotype <: OrdinaryDiffEqNewtonAdaptiveAlgorithm
-        kwargs[:nlsolve] = NLNewton(;
-            relax = Ribasim.MonitoredBackTracking(; z_tmp = copy(u0), dz_tmp = copy(u0)),
+        kwargs[:nlsolve] = NonlinearSolveAlg(
+            NewtonRaphson(; linesearch = BackTracking(), autodiff = AutoFiniteDiff()),
         )
     end
 
