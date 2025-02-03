@@ -484,7 +484,7 @@ TODO: Get preferred source order from input
 function get_sources_in_order(
     problem::JuMP.Model,
     p::Parameters,
-    node_rows::SQLite.Query,
+    node_tuples::Vector{NODE_ROW},
     subnetwork_id::Integer,
 )::OrderedDict{Tuple{NodeID, NodeID}, AllocationSource}
     # NOTE: return flow has to be done before other sources, to prevent that
@@ -497,7 +497,7 @@ function get_sources_in_order(
     # User return flow
     for node_id in sort(only(problem[:source_user].axes))
         edge = user_demand.outflow_edge[node_id.idx].edge
-        sources[edge] = AllocationSource(; edge, type = AllocationSourceType.user_return)
+        sources[edge] = AllocationSource(; edge, type = AllocationSourceType.user_demand)
     end
 
     # Boundary node sources
@@ -505,7 +505,7 @@ function get_sources_in_order(
         only(problem[:source_boundary].axes);
         by = edge -> (edge[1].value, edge[2].value),
     )
-        sources[edge] = AllocationSource(; edge, type = AllocationSourceType.boundary_node)
+        sources[edge] = AllocationSource(; edge, type = AllocationSourceType.boundary)
     end
 
     # Basins with level demand
@@ -513,7 +513,8 @@ function get_sources_in_order(
         if (graph[node_id].subnetwork_id == subnetwork_id) &&
            has_external_demand(graph, node_id, :level_demand)[1]
             edge = (node_id, node_id)
-            sources[edge] = AllocationSource(; edge, type = AllocationSourceType.basin)
+            sources[edge] =
+                AllocationSource(; edge, type = AllocationSourceType.level_demand)
         end
     end
 
@@ -524,14 +525,14 @@ function get_sources_in_order(
     )
         if graph[edge[2]].subnetwork_id == subnetwork_id
             sources[edge] =
-                AllocationSource(; edge, type = AllocationSourceType.main_to_sub)
+                AllocationSource(; edge, type = AllocationSourceType.subnetwork_inlet)
         end
     end
 
     # Buffers
     for node_id in sort(only(problem[:F_flow_buffer_out].axes))
         edge = (node_id, node_id)
-        sources[edge] = AllocationSource(; edge, type = AllocationSourceType.buffer)
+        sources[edge] = AllocationSource(; edge, type = AllocationSourceType.flow_demand)
     end
 
     sources
@@ -553,12 +554,12 @@ An AllocationModel object.
 function AllocationModel(
     subnetwork_id::Int32,
     p::Parameters,
-    node_rows::SQLite.Query,
+    node_tuples::Vector{NODE_ROW},
     Δt_allocation::Float64,
 )::AllocationModel
     capacity = get_capacity(p, subnetwork_id)
     problem = allocation_problem(p, capacity, subnetwork_id)
-    sources = get_sources_in_order(problem, p, node_rows, subnetwork_id)
+    sources = get_sources_in_order(problem, p, node_tuples, subnetwork_id)
     flow = JuMP.Containers.SparseAxisArray(Dict(only(problem[:F].axes) .=> 0.0))
 
     return AllocationModel(; subnetwork_id, capacity, flow, sources, problem, Δt_allocation)

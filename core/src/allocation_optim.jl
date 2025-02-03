@@ -188,7 +188,7 @@ function set_initial_capacities_inlet!(
             sum(subnetwork_allocateds[edge_id])
         end
         source = sources[edge_id]
-        @assert source.type == AllocationSourceType.main_to_sub
+        @assert source.type == AllocationSourceType.subnetwork_inlet
         source.capacity = source_capacity
     end
     return nothing
@@ -222,14 +222,14 @@ function reduce_source_capacity!(problem::JuMP.Model, source::AllocationSource):
 
     used_capacity =
         if source.type in (
-            AllocationSourceType.boundary_node,
-            AllocationSourceType.main_to_sub,
-            AllocationSourceType.user_return,
+            AllocationSourceType.boundary,
+            AllocationSourceType.subnetwork_inlet,
+            AllocationSourceType.user_demand,
         )
             JuMP.value(problem[:F][edge])
-        elseif source.type == AllocationSourceType.basin
+        elseif source.type == AllocationSourceType.level_demand
             JuMP.value(problem[:F_basin_out][edge[1]])
-        elseif source.type == AllocationSourceType.buffer
+        elseif source.type == AllocationSourceType.flow_demand
             JuMP.value(problem[:F_flow_buffer_out][edge[1]])
         else
             error("Unknown source type")
@@ -254,12 +254,12 @@ function increase_source_capacities!(
     for source in values(sources)
         (; edge) = source
 
-        additional_capacity = if source.type == AllocationSourceType.user_return
+        additional_capacity = if source.type == AllocationSourceType.user_demand
             id_user_demand = edge[1]
             inflow_edge = user_demand.inflow_edge[id_user_demand.idx].edge
             user_demand.return_factor[id_user_demand.idx](t) *
             JuMP.value(problem[:F][inflow_edge])
-        elseif source.type == AllocationSourceType.buffer
+        elseif source.type == AllocationSourceType.flow_demand
             id_connector_node = edge[1]
             JuMP.value(problem[:F_flow_buffer_in][id_connector_node])
         else
@@ -421,7 +421,7 @@ function set_initial_capacities_basin!(
 
     for node_id in only(constraints_outflow.axes)
         source = sources[(node_id, node_id)]
-        @assert source.type == AllocationSourceType.basin
+        @assert source.type == AllocationSourceType.level_demand
         source.capacity = get_basin_capacity(allocation_model, u, p, t, node_id)
     end
     return nothing
@@ -492,7 +492,7 @@ function set_initial_capacities_returnflow!(
 
     for node_id in only(constraints_outflow.axes)
         source = sources[user_demand.outflow_edge[node_id.idx].edge]
-        @assert source.type == AllocationSourceType.user_return
+        @assert source.type == AllocationSourceType.user_demand
         source.capacity = 0.0
     end
     return nothing
@@ -616,7 +616,7 @@ function set_initial_capacities_buffer!(allocation_model::AllocationModel)::Noth
 
     for node_id in only(constraints_flow_buffer.axes)
         source = sources[(node_id, node_id)]
-        @assert source.type == AllocationSourceType.buffer
+        @assert source.type == AllocationSourceType.flow_demand
         source.capacity = 0.0
     end
     return nothing
@@ -804,7 +804,7 @@ function allocate_to_users_from_connected_basin!(
 
             # The capacity of the upstream basin
             source = sources[(upstream_basin_id, upstream_basin_id)]
-            @assert source.type == AllocationSourceType.basin
+            @assert source.type == AllocationSourceType.level_demand
             capacity = source.capacity
 
             # The allocated amount
@@ -843,7 +843,7 @@ function set_source_capacity!(
 
         capacity_effective = if source == source_current
             if optimization_type == OptimizationType.collect_demands &&
-               source.type == AllocationSourceType.main_to_sub
+               source.type == AllocationSourceType.subnetwork_inlet
                 Inf
             else
                 source_current.capacity_reduced
@@ -852,15 +852,15 @@ function set_source_capacity!(
             0.0
         end
 
-        constraint = if source.type == AllocationSourceType.boundary_node
+        constraint = if source.type == AllocationSourceType.boundary
             constraints_source_boundary[edge]
-        elseif source.type == AllocationSourceType.main_to_sub
+        elseif source.type == AllocationSourceType.subnetwork_inlet
             constraints_source_main_network[edge]
-        elseif source.type == AllocationSourceType.basin
+        elseif source.type == AllocationSourceType.level_demand
             constraints_source_basin[edge[1]]
-        elseif source.type == AllocationSourceType.user_return
+        elseif source.type == AllocationSourceType.user_demand
             constraints_source_user_out[edge[1]]
-        elseif source.type == AllocationSourceType.buffer
+        elseif source.type == AllocationSourceType.flow_demand
             constraints_source_buffer[edge[1]]
         end
 
@@ -890,7 +890,7 @@ function optimize_per_source!(
 
     # Start the cumulative basin flow rates at 0
     for source in values(sources)
-        if source.type == AllocationSourceType.basin
+        if source.type == AllocationSourceType.level_demand
             source.basin_flow_rate = 0.0
         end
     end
@@ -942,7 +942,7 @@ function optimize_per_source!(
 
         # Add to the basin cumulative flow rate
         for (edge, source) in sources
-            if source.type == AllocationSourceType.basin
+            if source.type == AllocationSourceType.level_demand
                 node_id = edge[1]
                 source.basin_flow_rate +=
                     JuMP.value(F_basin_out[node_id]) - JuMP.value(F_basin_in[node_id])

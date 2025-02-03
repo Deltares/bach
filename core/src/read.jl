@@ -246,6 +246,51 @@ const conservative_nodetypes = Set{NodeType.T}([
     NodeType.ManningResistance,
 ])
 
+const NODE_ROW = @NamedTuple{node_id::NodeID, subnetwork_id::Int32, source_priority::Int32}
+
+function get_source_order_data(p::Parameters, db::DB, config::Config)::Vector{NODE_ROW}
+    (; default_source_priority) = config.allocation
+
+    node_rows = execute(
+        db,
+        "SELECT node_id, node_type, subnetwork_id, source_priority FROM Node ORDER BY subnetwork_id, source_priority",
+    )
+
+    # Build dictionary source type -> default source priority (e.g. "user_demand" => 1000)
+    default_source_priority_dict = Dict{String, Int32}()
+    for node_type in propertynames(default_source_priority)
+        if node_type == :boundary
+            default_source_priority_dict["flow_boundary"] = default_source_priority.boundary
+            default_source_priority_dict["level_boundary"] =
+                default_source_priority.boundary
+        else
+            default_source_priority_dict[String(node_type)] =
+                getproperty(default_source_priority, node_type)
+        end
+    end
+
+    # Get named tuples (; node_id, subnetwork_id, source_priority)
+    node_tuples = Vector{NODE_ROW}(undef, length(node_rows))
+
+    for (i, row) in enumerate(node_rows)
+        node_type = snake_case(row.node_type)
+        if node_type ∈ keys(default_source_priority_dict)
+            source_priority =
+                ismissing(row.source_priority) ? default_source_priority_dict[node_type] :
+                row.source_priority
+            node_id = NodeID(Symbol(row.node_type), row.node_id, p)
+            node_tuple = (; node_id, row.subnetwork_id, source_priority)
+        else
+            # Check whether this node connects to the main network, and if so...
+            # node_tuple = ...
+        end
+        node_tuples[i] = node_tuple
+    end
+
+    sort!(node_tuples; by = x -> (x.subnetwork_id, x.node_id))
+    node_tuples
+end
+
 function initialize_allocation!(p::Parameters, db::DB, config::Config)::Nothing
     (; graph, allocation) = p
     (; subnetwork_ids, allocation_models, main_network_connections) = allocation
@@ -269,15 +314,12 @@ function initialize_allocation!(p::Parameters, db::DB, config::Config)::Nothing
         find_subnetwork_connections!(p)
     end
 
-    node_rows = execute(
-        db,
-        "SELECT node_id, node_type, subnetwork_id, source_priority FROM Node ORDER BY subnetwork_id, source_priority",
-    )
+    node_tuples = get_source_order_data(p, db, config)
 
     for subnetwork_id in subnetwork_ids_
         push!(
             allocation_models,
-            AllocationModel(subnetwork_id, p, node_rows, config.allocation.timestep),
+            AllocationModel(subnetwork_id, p, node_tuples, config.allocation.timestep),
         )
     end
     return nothing
