@@ -140,7 +140,16 @@ The caches are always initialized with zeros
 """
 cache(len::Int)::Cache = LazyBufferCache(Returns(len); initializer! = set_zero!)
 
-@enumx AllocationSourceType boundary_node basin main_to_sub user_return buffer
+@eval @enumx AllocationSourceType $(fieldnames(Ribasim.config.DefaultSourcePriority)...)
+
+# Support creating a AllocationSourceTuple enum instance from a symbol
+function AllocationSourceType.T(s::Symbol)::AllocationSourceType.T
+    symbol_map = EnumX.symbol_map(AllocationSourceType.T)
+    for (sym, val) in symbol_map
+        sym == s && return AllocationSourceType.T(val)
+    end
+    throw(ArgumentError("Invalid value for AllocationSourceType: $s"))
+end
 
 """
 Data structure for a single source within an allocation subnetwork.

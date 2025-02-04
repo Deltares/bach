@@ -476,65 +476,94 @@ function allocation_problem(
     return problem
 end
 
+const SOURCE_TUPLE = @NamedTuple{
+    node_id::NodeID,
+    subnetwork_id::Int32,
+    source_priority::Int32,
+    source_type::AllocationSourceType.T,
+}
+
+# User return flow
+function AllocationSource(
+    p::Parameters,
+    source_tuple::SOURCE_TUPLE,
+    ::Val{AllocationSourceType.user_demand},
+)
+    (; user_demand) = p
+    (; node_id) = source_tuple
+    edge = user_demand.outflow_edge[node_id.idx].edge
+    AllocationSource(; edge, type = AllocationSourceType.user_demand)
+end
+
+# Boundary node sources
+function AllocationSource(
+    p::Parameters,
+    source_tuple::SOURCE_TUPLE,
+    ::Val{AllocationSourceType.boundary},
+)
+    (; graph) = p
+    (; node_id) = source_tuple
+    edge = outflow_edge(graph, node_id).edge
+    AllocationSource(; edge, type = AllocationSourceType.boundary)
+end
+
+# Basins with level demand
+function AllocationSource(
+    ::Parameters,
+    source_tuple::SOURCE_TUPLE,
+    ::Val{AllocationSourceType.level_demand},
+)
+    (; node_id) = source_tuple
+    edge = (node_id, node_id)
+    AllocationSource(; edge, type = AllocationSourceType.level_demand)
+end
+
+# Main network to subnetwork connections
+function AllocationSource(
+    p::Parameters,
+    source_tuple::SOURCE_TUPLE,
+    ::Val{AllocationSourceType.subnetwork_inlet},
+)
+    (; node_id) = source_tuple
+    edge = (inflow_id(p.graph, node_id), node_id)
+    AllocationSource(; edge, type = AllocationSourceType.subnetwork_inlet)
+end
+
+# Connector nodes with a flow demand
+function AllocationSource(
+    ::Parameters,
+    source_tuple::SOURCE_TUPLE,
+    ::Val{AllocationSourceType.flow_demand},
+)
+    (; node_id) = source_tuple
+    edge = (node_id, node_id)
+    AllocationSource(; edge, type = AllocationSourceType.flow_demand)
+end
+
 """
 Get the sources within the subnetwork in the order in which they will
 be optimized over.
 TODO: Get preferred source order from input
 """
 function get_sources_in_order(
-    problem::JuMP.Model,
     p::Parameters,
-    node_tuples::Vector{NODE_ROW},
+    source_priority_tuples::Vector{SOURCE_TUPLE},
     subnetwork_id::Integer,
 )::OrderedDict{Tuple{NodeID, NodeID}, AllocationSource}
     # NOTE: return flow has to be done before other sources, to prevent that
     # return flow is directly used within the same source priority
 
-    (; basin, user_demand, graph, allocation) = p
-
     sources = OrderedDict{Tuple{NodeID, NodeID}, AllocationSource}()
 
-    # User return flow
-    for node_id in sort(only(problem[:source_user].axes))
-        edge = user_demand.outflow_edge[node_id.idx].edge
-        sources[edge] = AllocationSource(; edge, type = AllocationSourceType.user_demand)
-    end
+    for subnetwork_group in
+        IterTools.groupby(row -> row.subnetwork_id, source_priority_tuples)
+        (first(subnetwork_group).subnetwork_id != subnetwork_id) && continue
 
-    # Boundary node sources
-    for edge in sort(
-        only(problem[:source_boundary].axes);
-        by = edge -> (edge[1].value, edge[2].value),
-    )
-        sources[edge] = AllocationSource(; edge, type = AllocationSourceType.boundary)
-    end
-
-    # Basins with level demand
-    for node_id in basin.node_id
-        if (graph[node_id].subnetwork_id == subnetwork_id) &&
-           has_external_demand(graph, node_id, :level_demand)[1]
-            edge = (node_id, node_id)
-            sources[edge] =
-                AllocationSource(; edge, type = AllocationSourceType.level_demand)
+        for source_tuple in subnetwork_group
+            source = AllocationSource(p, source_tuple, Val(source_tuple.source_type))
+            sources[source.edge] = source
         end
     end
-
-    # Main network to subnetwork connections
-    for edge in sort(
-        collect(keys(allocation.subnetwork_demands));
-        by = edge -> (edge[1].value, edge[2].value),
-    )
-        if graph[edge[2]].subnetwork_id == subnetwork_id
-            sources[edge] =
-                AllocationSource(; edge, type = AllocationSourceType.subnetwork_inlet)
-        end
-    end
-
-    # Buffers
-    for node_id in sort(only(problem[:F_flow_buffer_out].axes))
-        edge = (node_id, node_id)
-        sources[edge] = AllocationSource(; edge, type = AllocationSourceType.flow_demand)
-    end
-
     sources
 end
 
@@ -554,12 +583,12 @@ An AllocationModel object.
 function AllocationModel(
     subnetwork_id::Int32,
     p::Parameters,
-    node_tuples::Vector{NODE_ROW},
+    source_priority_tuples::Vector{SOURCE_TUPLE},
     Δt_allocation::Float64,
 )::AllocationModel
     capacity = get_capacity(p, subnetwork_id)
     problem = allocation_problem(p, capacity, subnetwork_id)
-    sources = get_sources_in_order(problem, p, node_tuples, subnetwork_id)
+    sources = get_sources_in_order(p, source_priority_tuples, subnetwork_id)
     flow = JuMP.Containers.SparseAxisArray(Dict(only(problem[:F].axes) .=> 0.0))
 
     return AllocationModel(; subnetwork_id, capacity, flow, sources, problem, Δt_allocation)

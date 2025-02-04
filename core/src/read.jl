@@ -246,9 +246,12 @@ const conservative_nodetypes = Set{NodeType.T}([
     NodeType.ManningResistance,
 ])
 
-const NODE_ROW = @NamedTuple{node_id::NodeID, subnetwork_id::Int32, source_priority::Int32}
-
-function get_source_order_data(p::Parameters, db::DB, config::Config)::Vector{NODE_ROW}
+function get_source_priority_data(
+    p::Parameters,
+    db::DB,
+    config::Config,
+)::Vector{SOURCE_TUPLE}
+    (; graph) = p
     (; default_source_priority) = config.allocation
 
     node_rows = execute(
@@ -257,38 +260,85 @@ function get_source_order_data(p::Parameters, db::DB, config::Config)::Vector{NO
     )
 
     # Build dictionary source type -> default source priority (e.g. "user_demand" => 1000)
-    default_source_priority_dict = Dict{String, Int32}()
-    for node_type in propertynames(default_source_priority)
-        if node_type == :boundary
-            default_source_priority_dict["flow_boundary"] = default_source_priority.boundary
-            default_source_priority_dict["level_boundary"] =
-                default_source_priority.boundary
+    default_source_priority_dict = Dict{Symbol, Int32}()
+    source_types = propertynames(default_source_priority)
+    for source_type in source_types
+        if source_type == :boundary
+            default_priority = default_source_priority.boundary
+            default_source_priority_dict[:flow_boundary] = default_priority
+            default_source_priority_dict[:level_boundary] = default_priority
         else
-            default_source_priority_dict[String(node_type)] =
-                getproperty(default_source_priority, node_type)
+            default_source_priority_dict[source_type] =
+                getproperty(default_source_priority, source_type)
         end
     end
 
     # Get named tuples (; node_id, subnetwork_id, source_priority)
-    node_tuples = Vector{NODE_ROW}(undef, length(node_rows))
+    source_priority_tuples = SOURCE_TUPLE[]
 
-    for (i, row) in enumerate(node_rows)
-        node_type = snake_case(row.node_type)
-        if node_type ∈ keys(default_source_priority_dict)
-            source_priority =
-                ismissing(row.source_priority) ? default_source_priority_dict[node_type] :
-                row.source_priority
-            node_id = NodeID(Symbol(row.node_type), row.node_id, p)
-            node_tuple = (; node_id, row.subnetwork_id, source_priority)
-        else
-            # Check whether this node connects to the main network, and if so...
-            # node_tuple = ...
+    errors = false
+
+    for row in node_rows
+        # Only source nodes that are part of a subnetwork are relevant
+        is_source = false
+        # One source priority can apply to multiple sources in the case of a LevelDemand
+        # node which connects to multiple basins
+        node_ids = [NodeID(Symbol(row.node_type), row.node_id, p)]
+        if !ismissing(row.subnetwork_id)
+            node_type = Symbol(snake_case(row.node_type))
+
+            if node_type ∈ source_types
+                # The case where the node type is also a source type
+                source_priority =
+                    coalesce(row.source_priority, default_source_priority_dict[node_type])
+                source_type = AllocationSourceType.T(node_type)
+                is_source = true
+                # If the row is for a level demand or flow demand, make node_ids
+                # for the node(s) that has/have the demand
+                if only(node_ids).type ∈ (NodeType.LevelDemand, NodeType.FlowDemand)
+                    node_ids =
+                        outneighbor_labels_type(graph, only(node_ids), EdgeType.control)
+                end
+            elseif node_type ∈ (:flow_boundary, :level_boundary)
+                # The case where the node type is a boundary source node type
+                source_priority =
+                    coalesce(row.source_priority, default_source_priority_dict[node_type])
+                source_type = AllocationSourceType.boundary
+                is_source = true
+            else
+                if row.subnetwork_id != 1 # Not in the main network
+                    for id in inflow_ids(p.graph, only(node_ids))
+                        if graph[id].subnetwork_id == 1 # Connects to the main network
+                            is_source = true
+                            source_priority =
+                                default_source_priority_dict[:subnetwork_inlet]
+                            source_type = AllocationSourceType.subnetwork_inlet
+                            break
+                        end
+                    end
+                end
+            end
         end
-        node_tuples[i] = node_tuple
+
+        if is_source
+            for node_id in node_ids
+                push!(
+                    source_priority_tuples,
+                    (; node_id, row.subnetwork_id, source_priority, source_type),
+                )
+            end
+        elseif !ismissing(row.source_priority)
+            errors = true
+            @error "$(only(node_ids)) has a source priority ($(row.source_priority)) but is not interpreted as a source by allocation."
+        end
     end
 
-    sort!(node_tuples; by = x -> (x.subnetwork_id, x.node_id))
-    node_tuples
+    if errors
+        error("Errors encountered when processing the allocation source priority data.")
+    end
+
+    sort!(source_priority_tuples; by = x -> (x.subnetwork_id, x.source_priority))
+    source_priority_tuples
 end
 
 function initialize_allocation!(p::Parameters, db::DB, config::Config)::Nothing
@@ -314,12 +364,17 @@ function initialize_allocation!(p::Parameters, db::DB, config::Config)::Nothing
         find_subnetwork_connections!(p)
     end
 
-    node_tuples = get_source_order_data(p, db, config)
+    source_priority_tuples = get_source_priority_data(p, db, config)
 
     for subnetwork_id in subnetwork_ids_
         push!(
             allocation_models,
-            AllocationModel(subnetwork_id, p, node_tuples, config.allocation.timestep),
+            AllocationModel(
+                subnetwork_id,
+                p,
+                source_priority_tuples,
+                config.allocation.timestep,
+            ),
         )
     end
     return nothing
