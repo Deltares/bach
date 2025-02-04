@@ -201,6 +201,7 @@ class Node(Input):
             QgsField("name", QVariant.String),
             QgsField("node_type", QVariant.String),
             QgsField("subnetwork_id", QVariant.Int),
+            QgsField("source_priority", QVariant.Int),
         ]
 
     @classmethod
