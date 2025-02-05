@@ -155,6 +155,7 @@ end
 Data structure for a single source within an allocation subnetwork.
 edge: The outflow edge of the source
 type: The type of source (edge, basin, main_to_sub, user_return, buffer)
+source_priority: The priority of the source
 capacity: The initial capacity of the source as determined by the physical layer
 capacity_reduced: The capacity adjusted by passed optimizations
 basin_flow_rate: The total outflow rate of a basin when optimized over all sources for one demand priority.
@@ -163,6 +164,7 @@ basin_flow_rate: The total outflow rate of a basin when optimized over all sourc
 @kwdef mutable struct AllocationSource
     const edge::Tuple{NodeID, NodeID}
     const type::AllocationSourceType.T
+    const source_priority::Int32
     capacity::Float64 = 0.0
     capacity_reduced::Float64 = 0.0
     basin_flow_rate::Float64 = 0.0
@@ -176,7 +178,8 @@ end
 """
 Store information for a subnetwork used for allocation.
 
-subnetwork_id: The ID of this allocation network
+subnetwork_id: The ID of this subnetwork
+source_priorities: All used source priority values in this subnetwork
 capacity: The capacity per edge of the allocation network, as constrained by nodes that have a max_flow_rate
 flow: The flows over all the edges in the subnetwork for a certain demand priority (used for allocation_flow output)
 sources: source data in preferred order of optimization
@@ -185,6 +188,7 @@ problem: The JuMP.jl model for solving the allocation problem
 """
 @kwdef struct AllocationModel
     subnetwork_id::Int32
+    source_priorities::Vector{Int32}
     capacity::JuMP.Containers.SparseAxisArray{Float64, 2, Tuple{NodeID, NodeID}}
     flow::JuMP.Containers.SparseAxisArray{Float64, 2, Tuple{NodeID, NodeID}}
     sources::OrderedDict{Tuple{NodeID, NodeID}, AllocationSource}
@@ -198,7 +202,7 @@ subnetwork_ids: The unique sorted allocation network IDs
 allocation_models: The allocation models for the main network and subnetworks corresponding to
     subnetwork_ids
 main_network_connections: (from_id, to_id) from the main network to the subnetwork per subnetwork
-demand_priorities: All used demand priority values.
+demand_priorities_all: All used demand priority values from all subnetworks
 subnetwork_demands: The demand of an edge from the main network to a subnetwork
 subnetwork_allocateds: The allocated flow of an edge from the main network to a subnetwork
 mean_input_flows: Per subnetwork, flows averaged over Δt_allocation over edges that are allocation sources
@@ -212,7 +216,7 @@ record_flow: A record of all flows computed by allocation optimization, eventual
     allocation_models::Vector{AllocationModel} = AllocationModel[]
     main_network_connections::Vector{Vector{Tuple{NodeID, NodeID}}} =
         Vector{Tuple{NodeID, NodeID}}[]
-    demand_priorities::Vector{Int32}
+    demand_priorities_all::Vector{Int32}
     subnetwork_demands::Dict{Tuple{NodeID, NodeID}, Vector{Float64}} = Dict()
     subnetwork_allocateds::Dict{Tuple{NodeID, NodeID}, Vector{Float64}} = Dict()
     mean_input_flows::Vector{Dict{Tuple{NodeID, NodeID}, Float64}}

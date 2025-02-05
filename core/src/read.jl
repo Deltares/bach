@@ -1554,7 +1554,7 @@ function Allocation(db::DB, config::Config, graph::MetaGraph)::Allocation
     subnetwork_ids = sort(collect(keys(graph[].node_ids)))
 
     if config.allocation.use_allocation
-        for subnetwork_id in subnetwork_ids
+        for _ in subnetwork_ids
             push!(mean_input_flows, Dict{Tuple{NodeID, NodeID}, Float64}())
         end
 
@@ -1603,7 +1603,7 @@ function Allocation(db::DB, config::Config, graph::MetaGraph)::Allocation
     end
 
     return Allocation(;
-        demand_priorities = get_all_demand_priorities(db, config),
+        demand_priorities_all = get_all_demand_priorities(db, config),
         mean_input_flows,
         mean_realized_flows,
     )

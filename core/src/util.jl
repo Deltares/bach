@@ -358,31 +358,36 @@ function is_main_network(subnetwork_id::Int32)::Bool
     return subnetwork_id == 1
 end
 
-function get_all_demand_priorities(db::DB, config::Config)::Vector{Int32}
+function get_all_demand_priorities(db::DB, config::Config;)::Vector{Int32}
     demand_priorities = Set{Int32}()
     is_valid = true
-    # TODO: Is there a way to automatically grab all tables with a demand priority column?
-    for (type, name) in [
-        (UserDemandStaticV1, "UserDemand / static"),
-        (UserDemandTimeV1, "UserDemand / time"),
-        (LevelDemandStaticV1, "LevelDemand / static"),
-        (LevelDemandTimeV1, "LevelDemand / time"),
-        (FlowDemandStaticV1, "FlowDemand / static"),
-        (FlowDemandTimeV1, "FlowDemand / time"),
-    ]
-        demand_priority_col = load_structvector(db, config, type).demand_priority
+
+    for name in names(Ribasim; all = true)
+        type = getfield(Ribasim, name)
+        if !(
+            (type isa DataType) &&
+            type <: Legolas.AbstractRecord &&
+            hasfield(type, :demand_priority)
+        )
+            continue
+        end
+
+        data = load_structvector(db, config, type)
+        demand_priority_col = data.demand_priority
         demand_priority_col = Int32.(coalesce.(demand_priority_col, Int32(0)))
         if valid_demand_priorities(demand_priority_col, config.allocation.use_allocation)
             union!(demand_priorities, demand_priority_col)
         else
             is_valid = false
-            @error "Missing demand_priority parameter(s) for a $name node in the allocation problem."
+            node, kind = nodetype(Legolas._schema_version_from_record_type(type))
+            table_name = "$node / $kind"
+            @error "Missing demand_priority parameter(s) for a $table_name node in the allocation problem."
         end
     end
     if is_valid
         return sort(collect(demand_priorities))
     else
-        error("Priority parameter is missing")
+        error("Missing demand priority parameter(s).")
     end
 end
 
@@ -402,7 +407,7 @@ function get_external_demand_priority_idx(p::Parameters, node_id::NodeID)::Int
         error("Nodes of type $type have no demand_priority.")
     end
 
-    return findsorted(allocation.demand_priorities, demand_priority)
+    return findsorted(allocation.demand_priorities_all, demand_priority)
 end
 
 """

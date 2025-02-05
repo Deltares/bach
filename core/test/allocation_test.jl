@@ -21,17 +21,17 @@
 
     # Last demand priority (= 2) flows
     @test flow[(NodeID(:Basin, 2, p), NodeID(:Pump, 5, p))] ≈ 0.0
-    @test flow[(NodeID(:Basin, 2, p), NodeID(:UserDemand, 10, p))] ≈ 0.5
-    @test flow[(NodeID(:Basin, 8, p), NodeID(:UserDemand, 12, p))] ≈ 3.0 rtol = 1e-5
-    @test flow[(NodeID(:UserDemand, 12, p), NodeID(:Basin, 8, p))] ≈ 1.0 rtol = 1e-5
-    @test flow[(NodeID(:Basin, 6, p), NodeID(:Outlet, 7, p))] ≈ 2.0 rtol = 1e-5
+    @test flow[(NodeID(:Basin, 2, p), NodeID(:UserDemand, 10, p))] ≈ 0.95
+    @test flow[(NodeID(:Basin, 8, p), NodeID(:UserDemand, 12, p))] ≈ 2.85 rtol = 1e-5
+    @test flow[(NodeID(:UserDemand, 12, p), NodeID(:Basin, 8, p))] ≈ 1.35 rtol = 1e-5
+    @test flow[(NodeID(:Basin, 6, p), NodeID(:Outlet, 7, p))] ≈ 1.5 rtol = 1e-5
     @test flow[(NodeID(:FlowBoundary, 1, p), NodeID(:Basin, 2, p))] ≈ 0.5
     @test flow[(NodeID(:Basin, 6, p), NodeID(:UserDemand, 11, p))] ≈ 0.0
 
     (; allocated) = p.user_demand
-    @test allocated[1, :] ≈ [0.0, 0.5]
-    @test allocated[2, :] ≈ [4.0, 0.0]
-    @test allocated[3, :] ≈ [0.0, 3.0] atol = 1e-5
+    @test allocated[1, :] ≈ [0.0, 0.95]
+    @test allocated[2, :] ≈ [5.0, 0.0]
+    @test allocated[3, :] ≈ [0.0, 2.85] atol = 1e-5
 end
 
 @testitem "Allocation objective" begin
@@ -180,11 +180,11 @@ end
     Ribasim.update_allocation!(model.integrator)
 
     @test subnetwork_allocateds[NodeID(:Basin, 2, p), NodeID(:Pump, 11, p)] ≈
-          [4, 0.49775, 0.0] atol = 1e-4
+          [4.49775, 0, 0.0] atol = 1e-4
     @test subnetwork_allocateds[NodeID(:Basin, 6, p), NodeID(:Pump, 24, p)] ≈
-          [0.001, 0.0, 0.0] rtol = 1e-3
+          [0.001124, 0.0, 0.0] rtol = 1e-3
     @test subnetwork_allocateds[NodeID(:Basin, 10, p), NodeID(:Pump, 38, p)] ≈
-          [0.001, 0.00024888, 0.0] rtol = 1e-3
+          [0.001124, 0.0, 0.0] rtol = 1e-3
 
     # Test for existence of edges in allocation flow record
     allocation_flow = DataFrame(record_flow)
@@ -198,7 +198,7 @@ end
     )
     @test all(allocation_flow.edge_exists)
 
-    @test user_demand.allocated[2, :] ≈ [4.0, 0.0, 0.0] atol = 1e-3
+    @test user_demand.allocated[2, :] ≈ [5.0, 0.0, 0.0] atol = 1e-3
     @test user_demand.allocated[7, :] ≈ [0.0, 0.0, 0.0] atol = 1e-3
 end
 
@@ -235,8 +235,8 @@ end
     # See the difference between these values here and in
     # "allocation with main network optimization problem", internal sources
     # lower the subnetwork demands
-    @test subnetwork_demands[(NodeID(:Basin, 2, p), NodeID(:Pump, 11, p))] ≈ [4.0, 4.0, 0.0] rtol =
-        1e-4
+    @test subnetwork_demands[(NodeID(:Basin, 2, p), NodeID(:Pump, 11, p))] ≈
+          [2.29, 4.0, 0.0] rtol = 1e-4
     @test subnetwork_demands[(NodeID(:Basin, 6, p), NodeID(:Pump, 24, p))] ≈
           [0.001, 0.0, 0.0] rtol = 1e-4
     @test subnetwork_demands[(NodeID(:Basin, 10, p), NodeID(:Pump, 38, p))][1:2] ≈
@@ -250,23 +250,23 @@ end
     Ribasim.formulate_storages!(current_storage, du, u, p, t)
 
     @test current_storage ≈ Float32[
-        1.0346908f6,
-        1.03469f6,
-        1.0346894f6,
-        1.034689f6,
-        1.0346888f6,
-        13.833241,
-        40.109993,
-        187761.73,
-        4641.365,
-        2402.6687,
-        6.039952,
-        928.84283,
-        8.0175905,
-        10419.247,
-        5.619053,
-        10419.156,
-        4.057502,
+        1.0346907998028994e6,
+        1.0346900002028993e6,
+        1.0346894000028991e6,
+        1.0346890002028992e6,
+        1.0346887998028992e6,
+        13.833241130516399,
+        40.10999115975574,
+        90602.5099761691,
+        4641.352087068657,
+        2276.717155306447,
+        6.039951939455932,
+        910.6868010228584,
+        8.017590253746807,
+        10419.248232898004,
+        5.61905296128316,
+        10419.157880882889,
+        4.057501775136188,
     ]
 end
 

@@ -350,7 +350,7 @@ function formulate_flow!(
         # and the current demand.
         # If allocation is not optimized then allocated = Inf, so the result is always
         # effectively allocated = demand.
-        for demand_priority_idx in eachindex(allocation.demand_priorities)
+        for demand_priority_idx in eachindex(allocation.demand_priorities_all)
             alloc_prio = allocated[demand_priority_idx]
             demand_prio = get_demand(user_demand, id, demand_priority_idx, t)
             alloc = min(alloc_prio, demand_prio)

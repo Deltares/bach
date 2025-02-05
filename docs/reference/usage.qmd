@@ -164,13 +164,14 @@ in some way. Counter intuitively, even systems you may think of as edges, such a
 are nodes in Ribasim. This is because edges only define direct instantaneous couplings
 between nodes, and never have storage of their own.
 
-column        | type     | restriction
---------------| -------- | -----------
-node_type     | String   | sorted, known node type
-node_id       | Int32    | sorted per node_type
-geom          | Point    | (optional)
-name          | String   | (optional, does not have to be unique)
-subnetwork_id | Int32    | (optional)
+column          | type     | restriction
+--------------- | -------- | -----------
+node_type       | String   | sorted, known node type
+node_id         | Int32    | sorted per node_type
+geom            | Point    | (optional)
+name            | String   | (optional, does not have to be unique)
+subnetwork_id   | Int32    | (optional)
+source_priority | Int32    | (optional, does not have to be unique)
 
 Adding a point geometry to the node table can be helpful to examine models in [QGIS](https://qgis.org/en/site/), as it will show the location of the nodes on the map.
 The geometry is not used by Ribasim.

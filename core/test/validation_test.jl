@@ -449,16 +449,16 @@ end
 
     logger = TestLogger()
     with_logger(logger) do
-        @test_throws "Priority parameter is missing" Ribasim.run(toml_path)
+        @test_throws "Missing demand priority parameter(s)." Ribasim.run(toml_path)
     end
     @test length(logger.logs) == 3
     @test logger.logs[1].level == Error
     @test logger.logs[1].message ==
-          "Missing demand_priority parameter(s) for a UserDemand / static node in the allocation problem."
+          "Missing demand_priority parameter(s) for a FlowDemand / static node in the allocation problem."
     @test logger.logs[2].message ==
           "Missing demand_priority parameter(s) for a LevelDemand / static node in the allocation problem."
     @test logger.logs[3].message ==
-          "Missing demand_priority parameter(s) for a FlowDemand / static node in the allocation problem."
+          "Missing demand_priority parameter(s) for a UserDemand / static node in the allocation problem."
 end
 
 @testitem "Node ID not in Node table" begin
