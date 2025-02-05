@@ -297,7 +297,7 @@ function get_source_priority_data(
                 # for the node(s) that has/have the demand
                 if only(node_ids).type ∈ (NodeType.LevelDemand, NodeType.FlowDemand)
                     node_ids =
-                        outneighbor_labels_type(graph, only(node_ids), EdgeType.control)
+                        outneighbor_labels_type(graph, only(node_ids), LinkType.control)
                 end
             elseif node_type ∈ (:flow_boundary, :level_boundary)
                 # The case where the node type is a boundary source node type
@@ -397,8 +397,8 @@ function LinearResistance(db::DB, config::Config, graph::MetaGraph)::LinearResis
 
     return LinearResistance(;
         node_id,
-        inflow_edge = inflow_edge.(Ref(graph), node_id),
-        outflow_edge = outflow_edge.(Ref(graph), node_id),
+        inflow_link = inflow_link.(Ref(graph), node_id),
+        outflow_link = outflow_link.(Ref(graph), node_id),
         parsed_parameters.active,
         parsed_parameters.resistance,
         parsed_parameters.max_flow_rate,
@@ -521,8 +521,8 @@ function TabulatedRatingCurve(
 
     return TabulatedRatingCurve(;
         node_id = node_ids,
-        inflow_edge = inflow_edge.(Ref(graph), node_ids),
-        outflow_edge = outflow_edge.(Ref(graph), node_ids),
+        inflow_link = inflow_link.(Ref(graph), node_ids),
+        outflow_link = outflow_link.(Ref(graph), node_ids),
         active,
         max_downstream_level,
         interpolations,
@@ -550,8 +550,8 @@ function ManningResistance(
 
     return ManningResistance(;
         node_id,
-        inflow_edge = inflow_edge.(Ref(graph), node_id),
-        outflow_edge = outflow_edge.(Ref(graph), node_id),
+        inflow_link = inflow_link.(Ref(graph), node_id),
+        outflow_link = outflow_link.(Ref(graph), node_id),
         parsed_parameters.active,
         parsed_parameters.length,
         parsed_parameters.manning_n,
@@ -635,7 +635,7 @@ function FlowBoundary(db::DB, config::Config, graph::MetaGraph)::FlowBoundary
 
     return FlowBoundary(;
         node_id = node_ids,
-        outflow_edges = outflow_edges.(Ref(graph), node_ids),
+        outflow_links = outflow_links.(Ref(graph), node_ids),
         parsed_parameters.active,
         parsed_parameters.flow_rate,
         concentration,
@@ -666,8 +666,8 @@ function Pump(db::DB, config::Config, graph::MetaGraph)::Pump
 
     return Pump(;
         node_id,
-        inflow_edge = inflow_edge.(Ref(graph), node_id),
-        outflow_edge = outflow_edge.(Ref(graph), node_id),
+        inflow_link = inflow_link.(Ref(graph), node_id),
+        outflow_link = outflow_link.(Ref(graph), node_id),
         parsed_parameters.active,
         flow_rate,
         parsed_parameters.min_flow_rate,
@@ -706,8 +706,8 @@ function Outlet(db::DB, config::Config, graph::MetaGraph)::Outlet
 
     return Outlet(;
         node_id,
-        inflow_edge = inflow_edge.(Ref(graph), node_id),
-        outflow_edge = outflow_edge.(Ref(graph), node_id),
+        inflow_link = inflow_link.(Ref(graph), node_id),
+        outflow_link = outflow_link.(Ref(graph), node_id),
         parsed_parameters.active,
         flow_rate,
         parsed_parameters.min_flow_rate,
@@ -1002,7 +1002,7 @@ function DiscreteControl(db::DB, config::Config, graph::MetaGraph)::DiscreteCont
     end
 
     controlled_nodes =
-        collect.(outneighbor_labels_type.(Ref(graph), node_id, EdgeType.control))
+        collect.(outneighbor_labels_type.(Ref(graph), node_id, LinkType.control))
 
     return DiscreteControl(;
         node_id,
@@ -1122,7 +1122,7 @@ function PidControl(db::DB, config::Config, graph::MetaGraph)::PidControl
 
     controlled_basins = Set{NodeID}()
     for id in node_ids
-        controlled_node = only(outneighbor_labels_type(graph, id, EdgeType.control))
+        controlled_node = only(outneighbor_labels_type(graph, id, LinkType.control))
         for id_inout in inoutflow_ids(graph, controlled_node)
             if id_inout.type == NodeType.Basin
                 push!(controlled_basins, id_inout)
@@ -1310,8 +1310,8 @@ function UserDemand(db::DB, config::Config, graph::MetaGraph)::UserDemand
 
     return UserDemand(;
         node_id = node_ids,
-        inflow_edge = inflow_edge.(Ref(graph), node_ids),
-        outflow_edge = outflow_edge.(Ref(graph), node_ids),
+        inflow_link = inflow_link.(Ref(graph), node_ids),
+        outflow_link = outflow_link.(Ref(graph), node_ids),
         active,
         demand,
         demand_reduced,
@@ -1558,16 +1558,16 @@ function Allocation(db::DB, config::Config, graph::MetaGraph)::Allocation
             push!(mean_input_flows, Dict{Tuple{NodeID, NodeID}, Float64}())
         end
 
-        # Find edges which serve as sources in allocation
-        for edge_metadata in values(graph.edge_data)
-            (; edge) = edge_metadata
-            id_source, _ = edge
+        # Find links which serve as sources in allocation
+        for link_metadata in values(graph.edge_data)
+            (; link) = link_metadata
+            id_source, _ = link
             if id_source.type in boundary_source_nodetypes
                 (; subnetwork_id) = graph[id_source]
                 # Check whether the source node is part of a subnetwork
                 if subnetwork_id ≠ 0
                     subnetwork_idx = searchsortedfirst(subnetwork_ids, subnetwork_id)
-                    mean_input_flows[subnetwork_idx][edge] = 0.0
+                    mean_input_flows[subnetwork_idx][link] = 0.0
                 end
             end
         end
@@ -1581,21 +1581,21 @@ function Allocation(db::DB, config::Config, graph::MetaGraph)::Allocation
             end
         end
 
-        # Find edges that realize a demand
-        for edge_metadata in values(graph.edge_data)
-            (; type, edge) = edge_metadata
+        # Find links that realize a demand
+        for link_metadata in values(graph.edge_data)
+            (; type, link) = link_metadata
 
-            src_id, dst_id = edge
+            src_id, dst_id = link
             user_demand_inflow =
-                (type == EdgeType.flow) && (dst_id.type == NodeType.UserDemand)
+                (type == LinkType.flow) && (dst_id.type == NodeType.UserDemand)
             level_demand_inflow =
-                (type == EdgeType.control) && (src_id.type == NodeType.LevelDemand)
+                (type == LinkType.control) && (src_id.type == NodeType.LevelDemand)
             flow_demand_inflow =
-                (type == EdgeType.flow) &&
+                (type == LinkType.flow) &&
                 has_external_demand(graph, dst_id, :flow_demand)[1]
 
             if user_demand_inflow || flow_demand_inflow
-                mean_realized_flows[edge] = 0.0
+                mean_realized_flows[link] = 0.0
             elseif level_demand_inflow
                 mean_realized_flows[(dst_id, dst_id)] = 0.0
             end
@@ -1613,8 +1613,8 @@ function Parameters(db::DB, config::Config)::Parameters
     graph = create_graph(db, config)
     allocation = Allocation(db, config, graph)
 
-    if !valid_edges(graph)
-        error("Invalid edge(s) found.")
+    if !valid_links(graph)
+        error("Invalid link(s) found.")
     end
     if !valid_n_neighbors(graph)
         error("Invalid number of connections for certain node types.")
@@ -1693,8 +1693,8 @@ end
 
 function get_node_ids(db::DB)::Vector{NodeID}
     nt = get_node_ids_types(db)
-    node_ids = Vector{Ribasim.NodeID}(undef, length(nt.node_id))
-    count = counter(Ribasim.NodeType.T)
+    node_ids = Vector{NodeID}(undef, length(nt.node_id))
+    count = counter(NodeType.T)
     for (i, (; node_id, node_type)) in enumerate(Tables.rows(nt))
         index = inc!(count, node_type)
         node_ids[i] = NodeID(node_type, node_id, index)
@@ -1715,7 +1715,7 @@ end
 function get_node_ids(db::DB, node_type)::Vector{NodeID}
     node_type = NodeType.T(node_type)
     node_ints = get_node_ids_int32(db, node_type)
-    node_ids = Vector{Ribasim.NodeID}(undef, length(node_ints))
+    node_ids = Vector{NodeID}(undef, length(node_ints))
     for (index, node_int) in enumerate(node_ints)
         node_ids[index] = NodeID(node_type, node_int, index)
     end

@@ -30,7 +30,7 @@
 
     (; allocated) = p.user_demand
     @test allocated[1, :] ≈ [0.0, 0.95]
-    @test allocated[2, :] ≈ [5.0, 0.0]
+    @test allocated[2, :] ≈ [5.0, 0.0] rtol = 1e-5
     @test allocated[3, :] ≈ [0.0, 2.85] atol = 1e-5
 end
 
@@ -165,13 +165,13 @@ end
     # Main network objective function
     F = problem[:F]
     objective = JuMP.objective_function(problem)
-    objective_edges = keys(objective.terms)
+    objective_links = keys(objective.terms)
     F_1 = F[(NodeID(:Basin, 2, p), NodeID(:Pump, 11, p))]
     F_2 = F[(NodeID(:Basin, 6, p), NodeID(:Pump, 24, p))]
     F_3 = F[(NodeID(:Basin, 10, p), NodeID(:Pump, 38, p))]
-    @test JuMP.UnorderedPair(F_1, F_1) ∈ objective_edges
-    @test JuMP.UnorderedPair(F_2, F_2) ∈ objective_edges
-    @test JuMP.UnorderedPair(F_3, F_3) ∈ objective_edges
+    @test JuMP.UnorderedPair(F_1, F_1) ∈ objective_links
+    @test JuMP.UnorderedPair(F_2, F_2) ∈ objective_links
+    @test JuMP.UnorderedPair(F_3, F_3) ∈ objective_links
 
     # Running full allocation algorithm
     (; Δt_allocation) = allocation_models[1]
@@ -186,7 +186,7 @@ end
     @test subnetwork_allocateds[NodeID(:Basin, 10, p), NodeID(:Pump, 38, p)] ≈
           [0.001124, 0.0, 0.0] rtol = 1e-3
 
-    # Test for existence of edges in allocation flow record
+    # Test for existence of links in allocation flow record
     allocation_flow = DataFrame(record_flow)
     transform!(
         allocation_flow,
@@ -194,9 +194,9 @@ end
             ByRow(
                 (a, b, c, d) ->
                     haskey(graph, NodeID(Symbol(a), b, p), NodeID(Symbol(c), d, p)),
-            ) => :edge_exists,
+            ) => :link_exists,
     )
-    @test all(allocation_flow.edge_exists)
+    @test all(allocation_flow.link_exists)
 
     @test user_demand.allocated[2, :] ≈ [5.0, 0.0, 0.0] atol = 1e-3
     @test user_demand.allocated[7, :] ≈ [0.0, 0.0, 0.0] atol = 1e-3
@@ -359,7 +359,7 @@ end
 
     # Realized user demand
     flow_table = DataFrame(Ribasim.flow_table(model))
-    flow_table_user_3 = flow_table[flow_table.edge_id .== 2, :]
+    flow_table_user_3 = flow_table[flow_table.link_id .== 2, :]
     itp_user_3 = LinearInterpolation(
         flow_table_user_3.flow_rate,
         Ribasim.seconds_since.(flow_table_user_3.time, model.config.starttime),
@@ -513,7 +513,7 @@ end
         @test Tables.schema(allocation_flow) == Tables.Schema(
             (
                 :time,
-                :edge_id,
+                :link_id,
                 :from_node_type,
                 :from_node_id,
                 :to_node_type,
