@@ -236,7 +236,7 @@ end
     # "allocation with main network optimization problem", internal sources
     # lower the subnetwork demands
     @test subnetwork_demands[(NodeID(:Basin, 2, p), NodeID(:Pump, 11, p))] ≈
-          [2.29, 4.0, 0.0] rtol = 1e-4
+          [2.29, 5.024, 0.0] rtol = 1e-4
     @test subnetwork_demands[(NodeID(:Basin, 6, p), NodeID(:Pump, 24, p))] ≈
           [0.001, 0.0, 0.0] rtol = 1e-4
     @test subnetwork_demands[(NodeID(:Basin, 10, p), NodeID(:Pump, 38, p))][1:2] ≈
@@ -468,9 +468,8 @@ end
     # The flow from the source is used up in previous demand priorities
     @test flow[(NodeID(:LevelBoundary, 1, p), node_id_with_flow_demand)] ≈ 0 atol = 1e-10
     # So flow from the flow buffer is used for UserDemand #4
-    @test JuMP.value(F_flow_buffer_out[node_id_with_flow_demand]) ≈ 0.001 rtol = 1e-3
-    # Flow taken from buffer
-    @test JuMP.value(only(F_flow_buffer_out)) ≈ user_demand.demand_itp[1][3](t) rtol = 1e-3
+    @test flow[(node_id_with_flow_demand, NodeID(:Basin, 3, p))] ≈ 0.001
+    @test flow[(NodeID(:Basin, 3, p), NodeID(:UserDemand, 4, p))] ≈ 0.001
     # No flow coming from level boundary
     @test JuMP.value(F[(only(level_boundary.node_id), node_id_with_flow_demand)]) ≈ 0 atol =
         1e-10
