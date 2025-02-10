@@ -128,7 +128,7 @@ end
     verbosity::LogLevel = Info
 end
 
-@option struct DefaultSourcePriority <: TableOption
+@option struct SourcePriority <: TableOption
     user_demand::Int32 = 1000
     boundary::Int32 = 2000 # boundary = {flow_boundary, level_boundary}
     level_demand::Int32 = 3000
@@ -139,7 +139,7 @@ end
 @option struct Allocation <: TableOption
     timestep::Float64 = 86400
     use_allocation::Bool = false
-    default_source_priority::DefaultSourcePriority = DefaultSourcePriority()
+    source_priority::SourcePriority = SourcePriority()
 end
 
 @option struct Experimental <: TableOption

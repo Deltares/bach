@@ -252,7 +252,7 @@ function get_source_priority_data(
     config::Config,
 )::Vector{SOURCE_TUPLE}
     (; graph) = p
-    (; default_source_priority) = config.allocation
+    default_source_priority = config.allocation.source_priority
 
     node_rows = execute(
         db,
@@ -260,18 +260,13 @@ function get_source_priority_data(
     )
 
     # Build dictionary source type -> default source priority (e.g. "user_demand" => 1000)
-    default_source_priority_dict = Dict{Symbol, Int32}()
     source_types = propertynames(default_source_priority)
-    for source_type in source_types
-        if source_type == :boundary
-            default_priority = default_source_priority.boundary
-            default_source_priority_dict[:flow_boundary] = default_priority
-            default_source_priority_dict[:level_boundary] = default_priority
-        else
-            default_source_priority_dict[source_type] =
-                getproperty(default_source_priority, source_type)
-        end
-    end
+    default_source_priority_dict = Dict{Symbol, Int32}(
+        source_type => getfield(default_source_priority, source_type) for
+        source_type in source_types
+    )
+    default_source_priority_dict[:flow_boundary] = default_source_priority.boundary
+    default_source_priority_dict[:level_boundary] = default_source_priority.boundary
 
     # Get named tuples (; node_id, subnetwork_id, source_priority)
     source_priority_tuples = SOURCE_TUPLE[]
@@ -305,17 +300,15 @@ function get_source_priority_data(
                     coalesce(row.source_priority, default_source_priority_dict[node_type])
                 source_type = AllocationSourceType.boundary
                 is_source = true
-            else
-                if row.subnetwork_id != 1 # Not in the main network
-                    for id in inflow_ids(p.graph, only(node_ids))
-                        if graph[id].subnetwork_id == 1 # Connects to the main network
-                            is_source = true
-                            source_priority =
-                                default_source_priority_dict[:subnetwork_inlet]
-                            source_type = AllocationSourceType.subnetwork_inlet
-                            break
-                        end
-                    end
+            elseif row.subnetwork_id != 1 # Not in the main network
+                for id in filter!(
+                    id -> graph[id].subnetwork_id == 1, # Connects to the main network
+                    collect(inflow_ids(p.graph, only(node_ids))),
+                )
+                    is_source = true
+                    source_priority = default_source_priority_dict[:subnetwork_inlet]
+                    source_type = AllocationSourceType.subnetwork_inlet
+                    break
                 end
             end
         end

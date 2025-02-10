@@ -140,7 +140,7 @@ The caches are always initialized with zeros
 """
 cache(len::Int)::Cache = LazyBufferCache(Returns(len); initializer! = set_zero!)
 
-@eval @enumx AllocationSourceType $(fieldnames(Ribasim.config.DefaultSourcePriority)...)
+@eval @enumx AllocationSourceType $(fieldnames(Ribasim.config.SourcePriority)...)
 
 # Support creating a AllocationSourceTuple enum instance from a symbol
 function AllocationSourceType.T(s::Symbol)::AllocationSourceType.T

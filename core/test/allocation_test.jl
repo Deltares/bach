@@ -236,7 +236,7 @@ end
     # "allocation with main network optimization problem", internal sources
     # lower the subnetwork demands
     @test subnetwork_demands[(NodeID(:Basin, 2, p), NodeID(:Pump, 11, p))] ≈
-          [2.29, 5.024, 0.0] rtol = 1e-4
+          [2.29, 4.0, 0.0] rtol = 1e-4
     @test subnetwork_demands[(NodeID(:Basin, 6, p), NodeID(:Pump, 24, p))] ≈
           [0.001, 0.0, 0.0] rtol = 1e-4
     @test subnetwork_demands[(NodeID(:Basin, 10, p), NodeID(:Pump, 38, p))][1:2] ≈

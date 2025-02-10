@@ -55,7 +55,7 @@ from ribasim.schemas import (
 from ribasim.utils import _concat, _pascal_to_snake
 
 
-class DefaultSourcePriority(ChildModel):
+class SourcePriority(ChildModel):
     """
     Specify per source node type what its default source priority is.
 
@@ -84,7 +84,7 @@ class Allocation(ChildModel):
 
     timestep: float = 86400.0
     use_allocation: bool = False
-    default_source_priority: DefaultSourcePriority = DefaultSourcePriority()
+    default_source_priority: SourcePriority = SourcePriority()
 
 
 class Results(ChildModel):
@@ -189,7 +189,7 @@ class Node(pydantic.BaseModel):
     subnetwork_id : int
         Optionally adds this node to a subnetwork, which is input for the allocation algorithm.
     source_priority : int
-        Optionally adds a source priority to this node, which is input for the allocation algorithm.
+        Optionally overrides the source priority for this node, which is used in the allocation algorithm.
     """
 
     node_id: NonNegativeInt | None = None
